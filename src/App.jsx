@@ -1,28 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   Sparkles, 
   Send, 
   Image as ImageIcon, 
   RefreshCw,
   CheckCircle2,
-  Globe,
-  MoreHorizontal,
   Download,
-  Calendar,
   Clock,
   Layers,
   ArrowLeft
 } from 'lucide-react';
-import { API_BASE_URL } from './config'; // استيراد رابط السيرفر الثابت
+import { API_BASE_URL } from './config';
+import DatabaseImagesGallery from './components/DatabaseImagesGallery';
 
 export default function App() {
-  const [currentView, setCurrentView] = useState('home'); // 'home' للصفحة الرئيسية أو 'gallery' لصفحة المعرض
+  const [currentView, setCurrentView] = useState('home');
 
   const [prompt, setPrompt] = useState('');
   const [aspectRatio, setAspectRatio] = useState('1:1');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [generatedImage, setGeneratedImage] = useState(null);
+  const [originalImageUrl, setOriginalImageUrl] = useState(null);
   const [imageBase64, setImageBase64] = useState(null);
   const [caption, setCaption] = useState('');
   const [notification, setNotification] = useState('');
@@ -31,35 +30,21 @@ export default function App() {
   const [publishAt, setPublishAt] = useState('');
   const [previewPlatform, setPreviewPlatform] = useState('facebook');
 
-  // حالات معرض الصور
-  const [storedImages, setStoredImages] = useState([]);
-  const [loadingImages, setLoadingImages] = useState(false);
-
   const showNotification = (msg) => {
     setNotification(msg);
     setTimeout(() => setNotification(''), 4000);
   };
 
-  const fetchStoredImages = async () => {
-    try {
-      setLoadingImages(true);
-      const response = await fetch(`${API_BASE_URL}/api/images`);
-      const data = await response.json();
-      if (data.success) {
-        setStoredImages(data.images);
+  const getLocalImageUrl = (url, base64) => {
+    if (url) {
+      const uploadIndex = url.indexOf('/uploads/');
+      if (uploadIndex !== -1) {
+        return `${API_BASE_URL}${url.substring(uploadIndex)}`;
       }
-    } catch (err) {
-      console.error('فشل جلب الصور:', err);
-    } finally {
-      setLoadingImages(false);
+      return url;
     }
+    return base64;
   };
-
-  useEffect(() => {
-    if (currentView === 'gallery') {
-      fetchStoredImages();
-    }
-  }, [currentView]);
 
   const handleDownloadImage = async () => {
     if (!generatedImage) return;
@@ -104,7 +89,8 @@ export default function App() {
         if (base64Source && !base64Source.startsWith('data:image')) {
           base64Source = `data:image/png;base64,${base64Source}`;
         }
-        setGeneratedImage(data.imageUrl);
+        setOriginalImageUrl(data.imageUrl || null);
+        setGeneratedImage(getLocalImageUrl(data.imageUrl, base64Source));
         setImageBase64(data.imageBase64 || null);
         setCaption(data.caption || `✨ تصميم احترافي مع الشعار: ${prompt}`);
         showNotification('تم توليد وتعديل الصورة بنجاح!');
@@ -138,7 +124,7 @@ export default function App() {
         title: prompt || 'منشور جديد',
         message: caption,
         caption: caption,
-        imageUrl: generatedImage,
+        imageUrl: originalImageUrl || generatedImage,
         imageBase64: imageBase64,
         ...(isScheduled && { publishAt })
       };
@@ -174,7 +160,6 @@ export default function App() {
         </div>
       )}
 
-      {/* الـ Header العلوي مع أزرار التنقل */}
       <header className="h-16 border-b border-slate-800 bg-slate-900/50 backdrop-blur-md px-6 flex items-center justify-between sticky top-0 z-10">
         <h2 className="text-lg font-bold">توليد ونشر محتوى بالذكاء الاصطناعي مع دمج الشعار</h2>
         
@@ -202,14 +187,9 @@ export default function App() {
         </div>
       </header>
 
-      {/* عرض الصفحة بناءً على الحالة (home أو gallery) */}
       <main className="p-6 max-w-7xl mx-auto w-full flex-1">
         {currentView === 'home' ? (
-          
-          /* ================= صفحة التوليد والنشر الرئيسية ================= */
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            
-            {/* البطاقة اليمنى: التوليد */}
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-5">
               <h3 className="font-bold text-lg flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-indigo-400" />
@@ -253,7 +233,6 @@ export default function App() {
               </button>
             </div>
 
-            {/* البطاقة اليسرى: المعاينة والنشر */}
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl flex flex-col justify-between space-y-4">
               <div className="space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -349,78 +328,9 @@ export default function App() {
                 </button>
               </div>
             </div>
-
           </div>
         ) : (
-          
-          /* ================= صفحة معرض الصور المستقلة ================= */
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-6">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-              <h3 className="text-lg font-bold flex items-center gap-2">
-                <Layers className="w-5 h-5 text-indigo-400" />
-                معرض الصور والمنشورات   
-              </h3>
-              <button 
-                onClick={fetchStoredImages}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded-xl text-xs transition"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${loadingImages ? 'animate-spin' : ''}`} /> تحديث القائمة
-              </button>
-            </div>
-
-            {loadingImages ? (
-              <div className="text-center py-20 text-slate-400 text-sm">جاري جلب البيانات من قاعدة البيانات...</div>
-            ) : storedImages.length === 0 ? (
-              <div className="text-center py-20 text-slate-500 text-sm">لا توجد سجلات مخزنة في قاعدة البيانات حالياً.</div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {storedImages.map((item) => (
-                  <div key={item.id} className="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden shadow-lg flex flex-col justify-between">
-                    <div className="w-full h-48 bg-slate-900 relative overflow-hidden border-b border-slate-800 flex items-center justify-center p-2">
-                      <img 
-                        src={item.url || item.imageBase64} 
-                        alt={item.title} 
-                        className="w-full h-full object-contain rounded-lg"
-                      />
-                      <span className={`absolute top-3 left-3 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase shadow ${
-                        item.status === 'published' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                      }`}>
-                        {item.status === 'published' ? 'تم النشر' : 'قيد الانتظار'}
-                      </span>
-                    </div>
-
-                    <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
-                      <div>
-                        <h4 className="font-bold text-sm text-slate-200 mb-1">{item.title}</h4>
-                        <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
-                          {item.prompt || 'لا يوجد وصف مضاف...'}
-                        </p>
-                      </div>
-
-                      <div className="pt-3 border-t border-slate-900 text-[11px] text-slate-400 space-y-1">
-                        <div className="flex items-center gap-1.5">
-                          <Calendar className="w-3.5 h-3.5 text-indigo-400" />
-                          <span>وقت الجدولة: {item.publishAt ? new Date(item.publishAt).toLocaleString('ar-EG') : 'فوري'}</span>
-                        </div>
-                      </div>
-
-                      <div className="flex gap-2 pt-2">
-                        <a 
-                          href={item.url || item.imageBase64} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="flex-1 text-center py-2 bg-indigo-600/10 hover:bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 rounded-xl text-xs font-medium transition"
-                        >
-                          عرض الصورة الكاملة ↗
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
+          <DatabaseImagesGallery />
         )}
       </main>
     </div>
